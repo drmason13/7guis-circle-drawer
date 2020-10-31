@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "dev": "snowpack dev",
+    "dev:css": "npx tailwindcss build src/tailwind.css -o public/stylesheet.css",
+    "start": "snowpack build",
+    "build:css": "export NODE_ENV=production; npx tailwindcss build src/tailwind.css -o build/stylesheet.css && if [ -f build/_dist_/tailwind.css ]; then rm build/_dist_/tailwind.css; fi",
+    "build": "snowpack build && yarn build:css && echo \"serve online with\nsurge build/ <my-site>.surge.sh\""
+  },
+  "dependencies": {
+    "svelte": "^3.24.0",
+    "tailwindcss": "^1.8.0",
+    "uuid": "^8.3.1"
+  },
+  "devDependencies": {
+    "@snowpack/app-scripts-svelte": "^1.8.5",
+    "purgecss": "^3.0.0",
+    "snowpack": "^2.12.0",
+    "svelte-check": "^1.0.0"
+  }
+}
