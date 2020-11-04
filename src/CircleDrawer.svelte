@@ -1,85 +1,58 @@
 <script>
     import {v4 as uuid} from 'uuid';
-    import { tick } from 'svelte';
 
-    import { circles, history, selected, newCircleAction, changedRadiusAction } from './stores.js';
+    import { actions, circles, history, selected } from './stores.js';
     import Circle from './Circle.svelte';
+    import Dialog from './Dialog.svelte';
 
     // parameters
     const defaultRadius = 20; // new circles are created with this radius
 
     // element references
-    let radiusInput; // the popup dialog's input for altering the selected circle's radius
+    let dialog; // Dialog for altering the selected circle's radius
 
     // state //
 
-    // modal will have its (absolute) position set to this
-    let modalPosition = {
+    // is the Dialog currently editing a circle?
+    let isEditing;
+
+    // stores the position to draw Dialog
+    let dialogPosition = {
         x: 0,
         y: 0,
     };
 
-    // stores the current radius selected using the popup dialog (modal)
-    let currentRadius;
-    // stores the previous radius before confirming the popup dialog (modal) for undo to use to undo the radius change
-    let prevRadius;
-
-    // derived values //
-
-    // update the radius of the currently selected circle
-    $: if ($selected) {
-        circles.update(circles => {
-            if (!prevRadius) {
-                prevRadius = circles[$selected].radius;
-            }
-            circles[$selected].radius = currentRadius;
-            return circles;
-        });
-    }
-
-    async function confirmRadiusChoice() {
-        if (currentRadius !== prevRadius) {
-            history.do(changedRadiusAction({ id: $selected, prevRadius, newRadius: currentRadius }));
-        }
-        prevRadius = null;
-
-        await tick();
-        selected.set(null);
-    }
-
     // handlers //
 
-    // selects a circle, moves modal to it and focuses its input
-    async function selectCircle(id, e) {
-        selected.set(id);
-        modalPosition = {
-            x: e.x,
-            y: e.y,
-        };
-        currentRadius = $circles[id].radius;
-        prevRadius = currentRadius;
-        
-        await tick();
-        radiusInput.focus();
+    // selects a circle, moves dialog to the click event's coordinates and focuses the dialog
+    function selectCircle(id, { x, y }) {
+        // don't allow selecting a new circle while the dialog is open
+        if (!$selected) {
+            selected.set(id);
+            dialog.syncRadius($circles[id].radius)
+
+            dialogPosition = { x, y };
+        } else {
+            dialog.confirmRadius();
+        }
     }
     
     // creates a new circle with unique id for referencing
     function newCircle(x, y) {
-        const id = uuid();
-        circles.update(c => {
-            c[id] = { id, x, y, radius: defaultRadius };
-            return c
-        });
-        prevRadius = defaultRadius;
-        // record the new circle in history
-        history.do(newCircleAction({ id, x, y, radius: defaultRadius }));
+        // don't allow creating a new circle while the dialog is open
+        if (!$selected) {
+            // record the new circle in history
+            history.do(actions.newCircle({ id: uuid(), x, y, radius: defaultRadius }));
+        } else {
+            dialog.confirmRadius();
+        }
     }
 </script>
 
 <article class="flex flex-col flex-grow-0 items-center justify-center mb-4 bg-beige-50 px-2 py-4">
     <section id="actions" class="flex flex-row flex-grow-0 items-center justify-center mb-4 bg-beige-50">
-        <button id="undo" on:click={history.undo} class="btn btn-outline-beige flex-grow-0 mx-2">Undo</button>
-        <button id="redo" on:click={history.redo} class="btn btn-outline-beige flex-grow-0 mx-2">Redo</button>
+        <button id="undo" on:click={() => { if ($selected) { dialog.close() } history.undo() }} disabled="{$history.undo.length == 0}" class="btn btn-outline-beige flex-grow-0 mx-2 disabled:opacity-50 disabled:cursor-not-allowed">Undo</button>
+        <button id="redo" on:click={() => { if ($selected) { dialog.close() } history.redo() }} disabled="{$history.redo.length == 0}" class="btn btn-outline-beige flex-grow-0 mx-2">Redo</button>
     </section>
     <section id="canvas" class="border">
         <svg on:click={e => newCircle(e.offsetX, e.offsetY)} height="500px" width="500px">
@@ -87,10 +60,6 @@
                 <Circle {id} {x} {y} {radius} {selectCircle}></Circle>
             {/each}
         </svg>
-        
-        <article id="modal" class="bg-beige-100 max-w-xs px-2 rounded border shadow-lg" class:hidden="{$selected === null}" class:absolute="{$selected !== null}" style="left: {modalPosition.x}px; top: {modalPosition.y}px;">
-            <p>radius: {currentRadius}</p>
-            <input bind:this={radiusInput} type="range" min="1" max="200" bind:value={currentRadius} on:blur={() => confirmRadiusChoice()} />
-        </article>
+        <Dialog bind:this={dialog} position={dialogPosition} bind:isEditing></Dialog>
     </section>
 </article>

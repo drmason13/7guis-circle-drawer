@@ -1,35 +1,43 @@
 import { writable } from 'svelte/store';
 
-// makes a record of a "New Circle" action for the history
-export function newCircleAction({ id, x, y, radius }) {
+// makes a new Circle
+function newCircle({ id, x, y, radius }) {
     return {
-        undo: () => {
+        do: ()  => {
             circles.update(c => {
-                delete c[id];
+                c[id] = { id, x, y, radius, confirmedRadius: radius };
                 return c
             });
         },
-        redo: () => {
+        undo: () => {
             circles.update(c => {
-                c[id] = { id, x, y, radius };
+                delete c[id];
                 return c
             });
         }
     }
 }
 
-// makes a record of a "Changed Radius" action for the history
-export function changedRadiusAction({ id, prevRadius, newRadius }) {
+// confirms the current radius as significant for the history
+function confirmRadius({ id, newRadius }) {
+    // oh filthy!
+    let previousRadius;
+
     return {
-        undo: () => {
+        do: () => {
             circles.update(c => {
-                c[id].radius = prevRadius;
+                let circle = c[id];
+                previousRadius = circle.confirmedRadius;
+                circle.radius = newRadius;
+                circle.confirmedRadius = newRadius;
                 return c
             });
         },
-        redo: () => {
+        undo: () => {
             circles.update(c => {
-                c[id].radius = newRadius;
+                let circle = c[id];
+                circle.radius = previousRadius;
+                circle.confirmedRadius = previousRadius;
                 return c
             });
         }
@@ -38,7 +46,7 @@ export function changedRadiusAction({ id, prevRadius, newRadius }) {
 
 // custom history store to implement undo / redo
 export function buildHistory() {
-    const { subscribe, set, update } = writable({
+    const { subscribe, update } = writable({
         undo: [],
         redo: [],
     });
@@ -46,6 +54,7 @@ export function buildHistory() {
     return {
         subscribe,
         do: action => update(({ undo, redo }) => {
+            action.do();
             // remember what we did so we can undo it later
             undo.push(action);
             // doing something new clears the redo buffer
@@ -63,15 +72,18 @@ export function buildHistory() {
 		redo: () => update(({ undo, redo }) => {
             const action = redo.pop();
             if (typeof action !== 'undefined') {
-                action.redo();
+                action.do();
                 undo.push(action);
             }
             return { undo, redo }
         }),
-		clear: () => set({ undo: [], redo: [] }),
 	};
 }
 
 export const circles = writable({});
 export const selected = writable(null);
 export const history = buildHistory();
+export const actions = {
+    newCircle,
+    confirmRadius,
+}
